@@ -97,7 +97,12 @@ public class ApkToAabService : IApkToAabService
             if (certificate.IsDefault)
             {
                 // Usar certificado padrão do Android
-                keystorePath = await PrepareDefaultKeystoreAsync(progress);
+                var keystoreResult = await PrepareDefaultKeystoreAsync(progress);
+                if (!keystoreResult.Success)
+                {
+                    return keystoreResult;
+                }
+                keystorePath = keystoreResult.OutputPath ?? string.Empty;
             }
             else
             {
