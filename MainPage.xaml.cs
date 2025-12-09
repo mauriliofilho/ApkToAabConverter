@@ -1,7 +1,17 @@
-﻿using ApkToAabConverter.Services;
+﻿﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ApkToAabConverter.Services;
 using ApkToAabConverter.Models;
+using Microsoft.Maui;
+using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Graphics;
+using Microsoft.Maui.Storage;
 
 namespace ApkToAabConverter;
+
 
 public partial class MainPage : ContentPage
 {
@@ -22,20 +32,44 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            var result = await FilePicker.PickAsync(new PickOptions
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                PickerTitle = "Select APK file",
-                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                AddLog("Opening file picker...");
+            });
+            
+            var customFileType = new FilePickerFileType(
+                new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
                     { DevicePlatform.macOS, new[] { "apk" } },
                     { DevicePlatform.MacCatalyst, new[] { "apk" } }
-                })
+                });
+
+            var options = new PickOptions
+            {
+                PickerTitle = "Select APK file",
+                FileTypes = customFileType
+            };
+
+            FileResult? result = null;
+            
+            // Garantir que o FilePicker seja chamado na main thread
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                try
+                {
+                    result = await FilePicker.Default.PickAsync(options);
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"✗ FilePicker error: {ex.Message}");
+                    await DisplayAlert("Error", $"Failed to open file picker: {ex.Message}", "OK");
+                }
             });
 
             if (result != null)
             {
                 _selectedApkPath = result.FullPath;
-                SelectedApkLabel.Text = result.FullPath;
+                SelectedApkLabel.Text = $"Selected: {Path.GetFileName(result.FullPath)}";
                 SelectedApkLabel.IsVisible = true;
 
                 // Gerar caminho de saída
@@ -48,13 +82,19 @@ public partial class MainPage : ContentPage
                 ConvertOnlyButton.IsEnabled = true;
                 ConvertAndSignButton.IsEnabled = true;
 
-                AddLog($"Selected APK: {result.FullPath}");
+                AddLog($"✓ Selected APK: {result.FullPath}");
                 StatusLabel.Text = "APK selected. Ready to convert.";
+                StatusLabel.TextColor = Colors.Blue;
+            }
+            else
+            {
+                AddLog("File selection cancelled.");
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            AddLog($"✗ Error selecting file: {ex.Message}");
+            await DisplayAlert("Error", $"Failed to select file: {ex.Message}", "OK");
         }
     }
 
@@ -62,27 +102,65 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            var result = await FilePicker.PickAsync(new PickOptions
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                PickerTitle = "Select Keystore file",
-                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                AddLog("Opening keystore file picker...");
+            });
+            
+            var customFileType = new FilePickerFileType(
+                new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
                     { DevicePlatform.macOS, new[] { "jks", "keystore", "p12" } },
                     { DevicePlatform.MacCatalyst, new[] { "jks", "keystore", "p12" } }
-                })
+                });
+
+            var options = new PickOptions
+            {
+                PickerTitle = "Select Keystore file",
+                FileTypes = customFileType
+            };
+
+            FileResult? result = null;
+            
+            // Garantir que o FilePicker seja chamado na main thread
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                try
+                {
+                    result = await FilePicker.Default.PickAsync(options);
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"✗ FilePicker error: {ex.Message}");
+                    await DisplayAlert("Error", $"Failed to open file picker: {ex.Message}", "OK");
+                }
             });
 
             if (result != null)
             {
+                AddLog($"Selected keystore: {Path.GetFileName(result.FullPath)}");
+                
                 // Solicitar informações do keystore
                 var keystorePassword = await DisplayPromptAsync("Keystore Password", "Enter keystore password:", "OK", "Cancel", keyboard: Keyboard.Default);
-                if (string.IsNullOrEmpty(keystorePassword)) return;
+                if (string.IsNullOrEmpty(keystorePassword))
+                {
+                    AddLog("Keystore password not provided.");
+                    return;
+                }
 
                 var keyAlias = await DisplayPromptAsync("Key Alias", "Enter key alias:", "OK", "Cancel");
-                if (string.IsNullOrEmpty(keyAlias)) return;
+                if (string.IsNullOrEmpty(keyAlias))
+                {
+                    AddLog("Key alias not provided.");
+                    return;
+                }
 
                 var keyPassword = await DisplayPromptAsync("Key Password", "Enter key password:", "OK", "Cancel", keyboard: Keyboard.Default);
-                if (string.IsNullOrEmpty(keyPassword)) return;
+                if (string.IsNullOrEmpty(keyPassword))
+                {
+                    AddLog("Key password not provided.");
+                    return;
+                }
 
                 _selectedCertificate = new CertificateInfo
                 {
@@ -96,12 +174,18 @@ public partial class MainPage : ContentPage
 
                 UseDefaultCertCheckbox.IsChecked = false;
                 CertificateInfoLabel.Text = $"Custom Certificate: {Path.GetFileName(result.FullPath)}";
-                AddLog($"Selected keystore: {result.FullPath}");
+                CertificateInfoLabel.TextColor = Colors.Green;
+                AddLog($"✓ Custom certificate configured: {Path.GetFileName(result.FullPath)}");
+            }
+            else
+            {
+                AddLog("Certificate selection cancelled.");
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            AddLog($"✗ Error selecting certificate: {ex.Message}");
+            await DisplayAlert("Error", $"Failed to select certificate: {ex.Message}", "OK");
         }
     }
 
